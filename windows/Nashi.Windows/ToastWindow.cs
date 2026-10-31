@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.IO;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -14,12 +16,13 @@ public sealed class ToastWindow:Window
     private readonly ProgressBar bar=new(){Height=5,Minimum=0,Maximum=1,IsIndeterminate=true};
     private readonly Button action=new(){Content="Cancel",MinWidth=85};
     private readonly Button undo=new(){Content="Undo",MinWidth=85,Visibility=Visibility.Collapsed};
+    private readonly Button copy=new(){Content="Copy to clipboard",MinWidth=90,Visibility=Visibility.Collapsed};
     private readonly Action? cancel;private bool complete;private readonly UndoHistory? undoHistory;private Guid? lastUndoId;
     public ToastWindow(Window owner,Action? cancel,UndoHistory? undoHistory=null)
     {
-        Theme.Attach(this);bar.SetResourceReference(Control.ForegroundProperty,"Gold");bar.SetResourceReference(Control.BackgroundProperty,"Inset");this.cancel=cancel;this.undoHistory=undoHistory;L10n.Content(action);L10n.Content(undo);Owner=owner;WindowStyle=WindowStyle.None;ResizeMode=ResizeMode.NoResize;AllowsTransparency=true;Background=Brushes.Transparent;ShowInTaskbar=false;ShowActivated=false;Topmost=true;SizeToContent=SizeToContent.Height;Width=510;
+        Theme.Attach(this);bar.SetResourceReference(Control.ForegroundProperty,"Gold");bar.SetResourceReference(Control.BackgroundProperty,"Inset");this.cancel=cancel;this.undoHistory=undoHistory;L10n.Content(action);L10n.Content(undo);L10n.Content(copy);Owner=owner;WindowStyle=WindowStyle.None;ResizeMode=ResizeMode.NoResize;AllowsTransparency=true;Background=Brushes.Transparent;ShowInTaskbar=false;ShowActivated=false;Topmost=true;SizeToContent=SizeToContent.Height;Width=510;
         var content=new StackPanel();content.Children.Add(label);content.Children.Add(detail);content.Children.Add(bar);
-        var grid=new Grid();grid.ColumnDefinitions.Add(new(){Width=new(1,GridUnitType.Star)});grid.ColumnDefinitions.Add(new(){Width=GridLength.Auto});grid.Children.Add(content);Grid.SetColumn(action,1);grid.Children.Add(action);action.Margin=new(18,0,0,0);action.VerticalAlignment=VerticalAlignment.Center;
+        var grid=new Grid();grid.ColumnDefinitions.Add(new(){Width=new(1,GridUnitType.Star)});grid.ColumnDefinitions.Add(new(){Width=GridLength.Auto});grid.ColumnDefinitions.Add(new(){Width=GridLength.Auto});grid.Children.Add(content);Grid.SetColumn(action,1);grid.Children.Add(action);action.Margin=new(18,0,0,0);action.VerticalAlignment=VerticalAlignment.Center;Grid.SetColumn(copy,2);grid.Children.Add(copy);copy.Margin=new(6,0,0,0);copy.VerticalAlignment=VerticalAlignment.Center;
         Content=new Border{CornerRadius=new(22),Background=Theme.Brush("Surface"),BorderBrush=Theme.Brush("Line"),BorderThickness=new(1),Padding=new(24),Child=grid};
         Loaded+=(_,_)=>{Left=Math.Max(8,owner.Left+(owner.ActualWidth-Width)/2);Top=Math.Max(8,owner.Top+owner.ActualHeight-ActualHeight-30);};
         action.Click+=(_,_)=>{if(!complete){this.cancel?.Invoke();action.IsEnabled=false;}};Update(new(null,"A fresh file is on its way…"));
@@ -31,6 +34,7 @@ public sealed class ToastWindow:Window
         complete=true;L10n.SetText(label,outputs.Count==0?"All set. You’re ready to go.":$"Nicely done. {outputs.Count} {(outputs.Count==1?"file is":"files are")} ready.");detail.Text=outputs.Count>0?Path.GetFileName(outputs[0]):"Ready.";bar.Visibility=Visibility.Collapsed;L10n.Bind(action,ContentControl.ContentProperty,"Show in Explorer");action.IsEnabled=true;
         action.Click+=(_,_)=>{if(outputs.Count>0&&(File.Exists(outputs[0])||Directory.Exists(outputs[0])))MainWindow.Reveal(outputs[0]);};
         if(undoHistory is not null&&sources is not null){lastUndoId=Guid.NewGuid();undoHistory.Record(revealLabel,sources,outputs);undo.Visibility=Visibility.Visible;}
+        if(outputs.Count>0){copy.Visibility=Visibility.Visible;copy.Click+=(_,_)=>{try{var list=new StringCollection();foreach(var p in outputs)list.Add(p);Clipboard.SetFileDropList(list);copy.Content=L10n.Text("Copied.");copy.IsEnabled=false;}catch{}};}
         var timer=new DispatcherTimer{Interval=TimeSpan.FromSeconds(3)};timer.Tick+=(_,_)=>{timer.Stop();if(WheelPresentation.Preferences.Animations&&SystemParameters.ClientAreaAnimation){var fade=new DoubleAnimation(0,TimeSpan.FromMilliseconds(280));fade.Completed+=(_,_)=>Close();BeginAnimation(OpacityProperty,fade);}else Close();};timer.Start();
     }
 }
