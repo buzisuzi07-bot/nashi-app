@@ -144,7 +144,7 @@ public static class VerifiedDownload
             // tail, so the partial is dropped and the transfer restarts cleanly.
             var ranged=response.StatusCode==System.Net.HttpStatusCode.PartialContent&&range?.From==resumeFrom&&resumeFrom>0&&range.Length is long rangeTotal&&rangeTotal>=resumeFrom;
             if(!ranged&&resumeFrom>0){File.Delete(partial);resumeFrom=0;}
-            var full=ranged?range.Length!.Value:response.Content.Headers.ContentLength;
+            var full=ranged?range!.Length!.Value:response.Content.Headers.ContentLength;
             if(full>maximum)throw new InvalidDataException("Download is larger than the supported limit.");
             await using var input=await response.Content.ReadAsStreamAsync(inactivity.Token);await using var target=new FileStream(partial,ranged?FileMode.Append:FileMode.Create,FileAccess.Write,FileShare.None,81920,true);
             var buffer=new byte[81920];long total=0;
