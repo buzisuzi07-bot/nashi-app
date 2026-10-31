@@ -30,6 +30,11 @@ public sealed partial class MainWindow
     {
         var menu=new System.Windows.Controls.ContextMenu();
         void Item(string text,Action action){var item=new System.Windows.Controls.MenuItem();L10n.Bind(item,System.Windows.Controls.HeaderedItemsControl.HeaderProperty,text);item.Click+=(_,_)=>action();menu.Items.Add(item);}
+        void Toggled(string text,bool value,Action<bool> change){var item=new System.Windows.Controls.MenuItem{IsCheckable=true,IsChecked=value};L10n.Bind(item,System.Windows.Controls.HeaderedItemsControl.HeaderProperty,text);item.Click+=(_,_)=>change(item.IsChecked);menu.Items.Add(item);}
+        // Windows parity for the macOS enable-toggle requested in issue #477:
+        // a single click in the tray pauses or resumes the global drag wheel
+        // and its hotkey; GlobalDragController re-reads Enabled on every poll.
+        Toggled("Enable Nashi drag shortcuts",preferences.Value.Enabled,enabled=>{if(enabled!=preferences.Value.Enabled)preferences.Save(preferences.Value with{Enabled=enabled});});
         Item("Open Nashi",ShowMain);Item("Library",()=>{ShowMain();ShowLibrary(true);});Item("Download copied link",OpenCopiedLink);Item("Settings",()=>{ShowMain();ShowSettings();});Item(update is null?"Check for updates":"Update to "+update.Version,()=>{ShowMain();_ = CheckUpdatesAsync(true);});menu.Items.Add(new System.Windows.Controls.Separator());Item("Quit Nashi",()=>{if(busy){ShowMain();L10n.SetText(status,"Finish or cancel the current operation before quitting.");return;}quitting=true;Application.Current.Shutdown();});return menu;
     }
     private void ApplyPreferences(){L10n.Language=preferences.Value.Language;Feedback.Enabled=preferences.Value.Feedback;WheelPresentation.Preferences=preferences.Value;}
