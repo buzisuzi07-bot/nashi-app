@@ -66,7 +66,7 @@ public sealed class HeadlessConversion
                 outputs.AddRange(archiveOutputs);
             }
         }
-        await ShowToastAsync(outputs,format);return outputs;
+        await ShowToastAsync(outputs,inputs,format);return outputs;
     }
     private string DestinationFolder(string firstInput)
     {
@@ -76,7 +76,7 @@ public sealed class HeadlessConversion
         // "ask" without a UI: fall back to beside the first file.
         return Path.GetDirectoryName(firstInput)!;
     }
-    private Task ShowToastAsync(IReadOnlyList<string> outputs,string format)
+    private Task ShowToastAsync(IReadOnlyList<string> outputs,IReadOnlyList<string> inputs,string format)
     {
         var tcs=new TaskCompletionSource<bool>();
         // Headless: a hidden owner window anchors the toast at the bottom-right
@@ -90,7 +90,7 @@ public sealed class HeadlessConversion
         toast.Show();
         var label=outputs.Count==0?"Dönüştürülmedi.":$"{outputs.Count} dosya {format.ToUpperInvariant()} olarak dönüştürüldü.";
         toast.Update(new(null,label));
-        toast.Complete(outputs);
+        toast.Complete(outputs,"Dönüştür",inputs);
         // Auto-close: toast fades after 3 s, owner closes after 5 s, then the
         // task completes and ConvertAsync returns.
         var wait=new DispatcherTimer{Interval=TimeSpan.FromSeconds(5)};wait.Tick+=(_,_)=>{wait.Stop();toastOwner?.Close();tcs.TrySetResult(true);};wait.Start();

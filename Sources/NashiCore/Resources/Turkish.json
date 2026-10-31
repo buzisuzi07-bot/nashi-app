@@ -725,6 +725,8 @@
   "Release to place · Esc cancels": "Yerleştirmek için bırak · Esc iptal eder",
   "Keep dragging\nDrop a file or link": "Sürüklemeye devam et\nDosya veya bağlantı bırak",
   "More": "Daha fazla",
+  "Undo": "Geri al",
+  "Undone.": "Geri alındı.",
   "Download copied link": "Kopyalanan bağlantıyı indir",
   "Convert to {0}": "{0} biçimine dönüştür",
   "Convert {0}": "{0} biçimine dönüştür",

@@ -21,7 +21,7 @@ public sealed partial class MainWindow
                 case "float":
                     if(preferences.Value.FloatBehavior=="addToExisting"&&shelves.LastOrDefault(s=>s.IsVisible) is {} existing){existing.Add(paths);existing.Activate();break;}
                     var shelf=new FloatShelf(paths,async(p,a)=>await PerformFileAction(a,p),p=>{files.Clear();Add(p);ShowLibrary(false);ShowMain();});shelves.Add(shelf);shelf.Closed+=(_,_)=>shelves.Remove(shelf);shelf.Show();break;
-                case "move":await RunAsync((destination,p,t)=>FileActions.MoveAsync(paths,destination,p,t),"Move");files.Clear();Refresh();break;
+                case "move":await RunAsync((destination,p,t)=>FileActions.MoveAsync(paths,destination,p,t),"Move",paths);files.Clear();Refresh();break;
             }
         }catch(Exception error){MessageBox.Show(this,L10n.Text(error.Message),L10n.Text("File action could not finish"));}
     }
