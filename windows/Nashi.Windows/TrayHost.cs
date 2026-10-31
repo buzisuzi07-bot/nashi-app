@@ -26,6 +26,12 @@ internal sealed class TrayHost:IDisposable
     [DllImport("user32.dll")]private static extern bool SetForegroundWindow(IntPtr window);
     private TrayIconRecovery? recovery;private readonly HwndSource source;private readonly Notice notice;private readonly Action open;private readonly Func<ContextMenu> menu;private readonly uint taskbarCreated=RegisterWindowMessage("TaskbarCreated");
     internal void UpdateAvailable(string version){notice.Tip="Nashi · Update "+version+" available";if(notice.Tip.Length>127)notice.Tip=notice.Tip[..127];notice.Flags=4;Shell_NotifyIcon(1,notice);}
+    internal void UpdateProgress(string? label,double? fraction)
+    {
+        if(label is null){notice.Tip="Nashi";notice.Info="";notice.Flags=7;Shell_NotifyIcon(1,notice);return;}
+        var text=fraction is {} f?$"{label} · {f:P0}":label;
+        notice.Tip="Nashi · "+text;if(notice.Tip.Length>127)notice.Tip=notice.Tip[..127];notice.Info=text;notice.InfoTitle="Progress";notice.Flags=4;Shell_NotifyIcon(1,notice);
+    }
     public TrayHost(Window window,Action open,Func<ContextMenu> menu)
     {
         this.open=open;this.menu=menu;var handle=new WindowInteropHelper(window).Handle;source=HwndSource.FromHwnd(handle);source.AddHook(Hook);notice=new(){Size=(uint)Marshal.SizeOf<Notice>(),Window=handle,Id=1,Flags=7,Callback=0x8000+710,Icon=MakeIcon()};if(!Shell_NotifyIcon(0,notice)){Dispose();throw new InvalidOperationException("Windows could not add Nashi to the system tray.");}recovery=new(()=>{notice.Flags=7;return Shell_NotifyIcon(0,notice);},ScheduleRestore,open);
