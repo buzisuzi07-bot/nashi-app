@@ -10,7 +10,7 @@ internal sealed class TrayHost:IDisposable
     [StructLayout(LayoutKind.Sequential,CharSet=CharSet.Unicode)]private sealed class Notice
     {
         public uint Size;public IntPtr Window;public uint Id,Flags,Callback;public IntPtr Icon;
-        [MarshalAs(UnmanagedType.ByValTStr,SizeConst=128)]public string Tip="Nashi";
+        [MarshalAs(UnmanagedType.ByValTStr,SizeConst=128)]public string Tip="Otto";
         public uint State,StateMask;[MarshalAs(UnmanagedType.ByValTStr,SizeConst=256)]public string Info="";public uint Version;
         [MarshalAs(UnmanagedType.ByValTStr,SizeConst=64)]public string InfoTitle="";public uint InfoFlags;public Guid Guid;public IntPtr BalloonIcon;
     }
@@ -25,12 +25,12 @@ internal sealed class TrayHost:IDisposable
     [DllImport("user32.dll",CharSet=CharSet.Unicode)]private static extern uint RegisterWindowMessage(string name);
     [DllImport("user32.dll")]private static extern bool SetForegroundWindow(IntPtr window);
     private TrayIconRecovery? recovery;private readonly HwndSource source;private readonly Notice notice;private readonly Action open;private readonly Func<ContextMenu> menu;private readonly uint taskbarCreated=RegisterWindowMessage("TaskbarCreated");
-    internal void UpdateAvailable(string version){notice.Tip="Nashi · Update "+version+" available";if(notice.Tip.Length>127)notice.Tip=notice.Tip[..127];notice.Flags=4;Shell_NotifyIcon(1,notice);}
+    internal void UpdateAvailable(string version){notice.Tip="Otto · Update "+version+" available";if(notice.Tip.Length>127)notice.Tip=notice.Tip[..127];notice.Flags=4;Shell_NotifyIcon(1,notice);}
     internal void UpdateProgress(string? label,double? fraction)
     {
-        if(label is null){notice.Tip="Nashi";notice.Info="";notice.Flags=7;Shell_NotifyIcon(1,notice);return;}
+        if(label is null){notice.Tip="Otto";notice.Info="";notice.Flags=7;Shell_NotifyIcon(1,notice);return;}
         var text=fraction is {} f?$"{label} · {f:P0}":label;
-        notice.Tip="Nashi · "+text;if(notice.Tip.Length>127)notice.Tip=notice.Tip[..127];notice.Info=text;notice.InfoTitle="Progress";notice.Flags=4;Shell_NotifyIcon(1,notice);
+        notice.Tip="Otto · "+text;if(notice.Tip.Length>127)notice.Tip=notice.Tip[..127];notice.Info=text;notice.InfoTitle="Progress";notice.Flags=4;Shell_NotifyIcon(1,notice);
     }
     public TrayHost(Window window,Action open,Func<ContextMenu> menu)
     {

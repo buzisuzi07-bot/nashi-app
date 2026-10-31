@@ -102,7 +102,7 @@ public sealed class FloatShelf:Window
         const string wire="M76,71 L57,28 C47,6 70,-1 78,19 L94,57 C102,74 87,78 81,63 L66,28";
         foreach(var (color,width) in new[]{("#55000000",4.5),("#C2CAC5",2.6),("#CCFFFFFF",.7)})stack.Children.Add(new System.Windows.Shapes.Path{Data=Geometry.Parse(wire),Stroke=new SolidColorBrush((Color)ColorConverter.ConvertFromString(color)),StrokeThickness=width,StrokeStartLineCap=PenLineCap.Round,StrokeEndLineCap=PenLineCap.Round,IsHitTestVisible=false});
     }
-    private void UpdateLabels(){count.Content=(IsExpanded?"⌃  ":"⌄  ")+L10n.Text(paths.Count==1?"1 item":$"{paths.Count} items");count.ToolTip=L10n.Text(IsExpanded?"Collapse Float":"Expand Float");status.Text=L10n.Text(files.SelectedItems.Count>0?$"{files.SelectedItems.Count} selected":"Space · Preview");Title=$"Float · {paths.Count} · Nashi";}
+    private void UpdateLabels(){count.Content=(IsExpanded?"⌃  ":"⌄  ")+L10n.Text(paths.Count==1?"1 item":$"{paths.Count} items");count.ToolTip=L10n.Text(IsExpanded?"Collapse Float":"Expand Float");status.Text=L10n.Text(files.SelectedItems.Count>0?$"{files.SelectedItems.Count} selected":"Space · Preview");Title=$"Float · {paths.Count} · Otto";}
     private void Present()
     {
         glass.Visibility=IsExpanded?Visibility.Visible:Visibility.Collapsed;glass.Background=new LinearGradientBrush(Theme.Dark?Color.FromArgb(248,42,49,34):Color.FromArgb(248,250,231,185),Theme.Dark?Color.FromArgb(248,26,39,30):Color.FromArgb(248,227,235,211),90);glass.SetResourceReference(Border.BorderBrushProperty,"Line");

@@ -16,7 +16,7 @@ internal sealed class FileGarden:Grid
         AddCard("PDF",-16,-34,12,"Muted");AddCard("PNG",7,31,-2,"Gold");
         mark=new Image{Width=65,Height=65,RenderTransform=new TranslateTransform(0,42)};Children.Add(mark);SetSelected(false);
     }
-    internal void SetSelected(bool selected)=>mark.Source=Artwork(selected?"NashiMarkHappy":"NashiMark");
+    internal void SetSelected(bool selected)=>mark.Source=Artwork(selected?"OttoMarkHappy":"OttoMark");
     internal static BitmapImage Artwork(string name)=>new(new Uri("pack://application:,,,/Assets/"+name+".png"));
     private void AddCard(string label,double angle,double x,double y,string color)
     {

@@ -22,7 +22,7 @@ internal sealed class FilePreviewWindow:Window
         this.tools=tools??new Toolchain(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"Nashi","Tools","v1"),Environment.GetEnvironmentVariable("PATH"));
         this.office=office??new OfficeRuntime(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"Nashi","Tools"));
         this.paths=paths.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();if(this.paths.Length==0)throw new ArgumentException("Choose a file to preview.");
-        Owner=owner;Title="Preview · Nashi";Width=800;Height=620;MinWidth=560;MinHeight=400;WindowStartupLocation=WindowStartupLocation.CenterOwner;Theme.Attach(this);
+        Owner=owner;Title="Preview · Otto";Width=800;Height=620;MinWidth=560;MinHeight=400;WindowStartupLocation=WindowStartupLocation.CenterOwner;Theme.Attach(this);
         var root=new DockPanel{Margin=new(20)};Content=root;var header=new DockPanel{Margin=new(0,0,0,14)};DockPanel.SetDock(header,Dock.Top);root.Children.Add(header);
         var navigation=new StackPanel{Orientation=Orientation.Horizontal};DockPanel.SetDock(navigation,Dock.Right);header.Children.Add(navigation);
         navigation.Children.Add(MainWindow.Button("←",()=>Navigate(-1)));navigation.Children.Add(MainWindow.Button("→",()=>Navigate(1)));navigation.Children.Add(MainWindow.Button("Open",()=>{if(File.Exists(CurrentPath)||Directory.Exists(CurrentPath))MainWindow.OpenUrl(CurrentPath);}));header.Children.Add(caption);
