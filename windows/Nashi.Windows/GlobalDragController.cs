@@ -31,7 +31,7 @@ public sealed class GlobalDragController:IDisposable
     private NativePoint start;private bool down,opened;private Task<string?>? hint;private GlobalDropWheel? wheel;private HwndSource? source;private IntPtr handle;private bool? shortcutEnabled;
     internal GlobalDropWheel? ActiveWheel=>wheel;
     public bool LinkShortcutRegistered{get;private set;}
-    private bool OwnerAvailable=>DesktopGeometry.IsInteractive(owner);
+    private bool OwnerAvailable=>DesktopGeometry.IsInteractive(owner)&&!DesktopGeometry.IsForegroundFullscreen(new WindowInteropHelper(owner).Handle);
     public GlobalDragController(Window owner,PreferencesStore preferences,Action<string,IDataObject,string?> dropped,Action link)
     {
         this.owner=owner;this.preferences=preferences;this.dropped=dropped;this.link=link;timer=new(){Interval=TimeSpan.FromMilliseconds(40)};timer.Tick+=(_,_)=>Poll();

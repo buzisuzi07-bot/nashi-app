@@ -11,6 +11,7 @@ internal static class DesktopGeometry
     [DllImport("user32.dll")]private static extern IntPtr MonitorFromWindow(IntPtr window,uint flags);
     [DllImport("user32.dll")]private static extern bool GetMonitorInfo(IntPtr monitor,ref MonitorInfo info);
     [DllImport("user32.dll")]private static extern bool GetWindowRect(IntPtr window,out Rect rect);
+    [DllImport("user32.dll")]private static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")]private static extern bool IsWindowEnabled(IntPtr window);
     [DllImport("user32.dll")]private static extern bool SetWindowPos(IntPtr window,IntPtr after,int x,int y,int width,int height,uint flags);
     [DllImport("shcore.dll")]private static extern int GetDpiForMonitor(IntPtr monitor,int type,out uint x,out uint y);
@@ -33,6 +34,18 @@ internal static class DesktopGeometry
         var handle=new WindowInteropHelper(window).Handle;var info=new MonitorInfo{Size=Marshal.SizeOf<MonitorInfo>()};return GetMonitorInfo(MonitorFromWindow(handle,2),ref info)&&GetWindowRect(handle,out var r)&&r.Left>=info.Work.Left&&r.Top>=info.Work.Top&&r.Right<=info.Work.Right&&r.Bottom<=info.Work.Bottom;
     }
     internal static bool IsInteractive(Window window){var handle=new WindowInteropHelper(window).Handle;return window.IsEnabled&&(handle==IntPtr.Zero||IsWindowEnabled(handle));}
+    // Issue #200: when another app (game, video player…) owns the foreground in fullscreen,
+    // Nashi's global drag wheel and hotkey should pause automatically. Nashi's own window
+    // is excluded so a fullscreen Nashi does not lock itself out.
+    internal static bool IsForegroundFullscreen(IntPtr excludeHandle=default)
+    {
+        var foreground=GetForegroundWindow();
+        if(foreground==IntPtr.Zero||foreground==excludeHandle)return false;
+        if(!GetWindowRect(foreground,out var r))return false;
+        var monitor=MonitorFromWindow(foreground,2);var info=new MonitorInfo{Size=Marshal.SizeOf<MonitorInfo>()};
+        if(!GetMonitorInfo(monitor,ref info))return false;
+        return r.Left<=info.Work.Left&&r.Top<=info.Work.Top&&r.Right>=info.Work.Right&&r.Bottom>=info.Work.Bottom;
+    }
     internal static void PlaceWheel(Window window,int x,int y,double logicalSize)
     {
         var monitor=MonitorFromPoint(new(){X=x,Y=y},2);var info=new MonitorInfo{Size=Marshal.SizeOf<MonitorInfo>()};if(!GetMonitorInfo(monitor,ref info))return;
