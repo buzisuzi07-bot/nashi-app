@@ -287,7 +287,7 @@ public sealed partial class MainWindow:Window
     private static readonly string[] FileActionIds=["share","float","copy","move","copyPath","terminal"];
     private async Task ChooseFromWheel(ToolChoice choice)
     {
-        if(choice.Id=="convert")ShowConversionWheel();else if(FileActionIds.Contains(choice.Id))await PerformFileAction(choice.Id,files.ToArray());else await EditAsync(choice);
+        if(choice.Id=="convert")ShowConversionWheel();else if(FileActionIds.Contains(choice.Id))await PerformFileAction(choice.Id,files.ToArray());else if(choice.Id=="ocr"){var window=new OcrWindow(this);window.ShowDialog();}else await EditAsync(choice);
     }
     private void ShowWheel()
     {

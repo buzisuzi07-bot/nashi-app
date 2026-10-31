@@ -377,7 +377,8 @@
       "annotateImage",
       "frameImage",
       "cropImage",
-      "redactImage"
+      "redactImage",
+      "ocr"
     ],
     "png": [
       "compress",
@@ -386,7 +387,8 @@
       "annotateImage",
       "frameImage",
       "cropImage",
-      "redactImage"
+      "redactImage",
+      "ocr"
     ],
     "webp": [
       "compress",
@@ -395,7 +397,8 @@
       "annotateImage",
       "frameImage",
       "cropImage",
-      "redactImage"
+      "redactImage",
+      "ocr"
     ],
     "heic": [
       "compress",
@@ -404,7 +407,8 @@
       "annotateImage",
       "frameImage",
       "cropImage",
-      "redactImage"
+      "redactImage",
+      "ocr"
     ],
     "tiff": [
       "compress",
@@ -415,9 +419,22 @@
       "cropImage",
       "redactImage"
     ],
-    "svg": [],
-    "avif": [],
-    "bmp": [],
+    "svg": [
+      "ocr"
+    ],
+    "avif": [
+      "compress",
+      "removeMetadata",
+      "editImage",
+      "annotateImage",
+      "frameImage",
+      "cropImage",
+      "redactImage",
+      "ocr"
+    ],
+    "bmp": [
+      "ocr"
+    ],
     "mp3": [
       "compress",
       "removeMetadata",
@@ -688,7 +705,8 @@
     "redactImage": "Redact Photo",
     "redactVideo": "Redact Video",
     "redactAudio": "Bleep Audio",
-    "readQRCode": "Read QR Codes"
+    "readQRCode": "Read QR Codes",
+    "ocr": "Read Text (OCR)"
   },
   "fileActions": [
     "share",

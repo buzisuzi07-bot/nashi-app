@@ -20,7 +20,7 @@ public sealed partial class MainWindow
         if(selected.Length==1){var values=await metadataService.ReadAsync(selected[0]);var editor=new MetadataEditor(this,values);if(editor.ShowDialog()!=true)return;removeAll=editor.RemoveAll;changes=removeAll?null:editor.Updates;}
         await RunAsync((destination,p,t)=>metadataService.WriteAsync(selected,destination,removeAll,changes,progress:p,token:t),"Metadata",selected);
     }
-    internal static string ToolSymbol(string id)=>id switch{"compress"=>"↘","removeMetadata"=>"◇","editImage"=>"☷","annotateImage"=>"✎","frameImage"=>"▣","cropImage" or "cropVideo"=>"⌗","trimAudio" or "trimVideo"=>"✂","muteVideo"=>"♫","normalizeAudio"=>"≋","audioChannels"=>"⇆","audioToVideo"=>"▷","createCollage"=>"▦","redactImage" or "redactVideo" or "redactAudio"=>"▨","readQRCode"=>"▧","mergePDF"=>"▣","splitPDF" or "splitVideo"=>"◫","organizePDF"=>"▤","extractArchive"=>"↗","createPDF"=>"▱","joinVideos"=>"⇥","videoSnapshots"=>"▣","changeVideoSpeed"=>"◴",_=>"↗"};
+    internal static string ToolSymbol(string id)=>id switch{"compress"=>"↘","removeMetadata"=>"◇","editImage"=>"☷","annotateImage"=>"✎","frameImage"=>"▣","cropImage" or "cropVideo"=>"⌗","trimAudio" or "trimVideo"=>"✂","muteVideo"=>"♫","normalizeAudio"=>"≋","audioChannels"=>"⇆","audioToVideo"=>"▷","createCollage"=>"▦","redactImage" or "redactVideo" or "redactAudio"=>"▨","readQRCode"=>"▧","ocr"=>"🔍","mergePDF"=>"▣","splitPDF" or "splitVideo"=>"◫","organizePDF"=>"▤","extractArchive"=>"↗","createPDF"=>"▱","joinVideos"=>"⇥","videoSnapshots"=>"▣","changeVideoSpeed"=>"◴",_=>"↗"};
     private async Task SetupOfficeAsync()
     {
         if(busy)return;if(officeRuntime.Executable is not null){L10n.SetText(status,"Office tools are ready.");return;}
