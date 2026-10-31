@@ -1,6 +1,7 @@
 using System.Text.Json;
 namespace Nashi.Core;
 public sealed record OutputProfile(double Quality=.85,bool PreserveMetadata=true,int AudioBitrate=256,string SampleDepth="matchSource",int MaxVideoHeight=0,int GifFrameRate=15,int GifWidth=960,string Compression="balanced",string Layout="editable",string EpubLayout="reflowable",int Dpi=144);
+public sealed record WatchFolder(string Path,string Format,bool Enabled=true);
 public sealed record Preferences
 {
     public string Language{get;init;}="en";
@@ -11,10 +12,11 @@ public sealed record Preferences
     public string OutputMode{get;init;}="beside";public string OutputFolder{get;init;}="";public string DownloadFolder{get;init;}=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),"Downloads");
     public Dictionary<string,OutputProfile> Formats{get;init;}=[];
     public string[] QuickApps{get;init;}=[];public string[] QuickSites{get;init;}=[];public bool QuickLaunchEnabled{get;init;}=true;
+    public List<WatchFolder> WatchFolders{get;init;}=[];
 }
 public sealed class PreferencesStore
 {
-    private readonly string file;public Preferences Value{get;private set;}=new();public string? RecoveryNotice{get;private set;}
+    private readonly string file;public Preferences Value{get;private set;}=new();public string? RecoveryNotice{get;private set;}public string DirectoryPath=>Path.GetDirectoryName(file)!;
     public PreferencesStore(string directory)
     {
         file=Path.Combine(directory,"preferences.json");if(!File.Exists(file))return;try{if(new FileInfo(file).Length>1_000_000)throw new InvalidDataException();Value=JsonSerializer.Deserialize<Preferences>(File.ReadAllText(file))??new();Value=Value with{Language=AppLocalization.Normalize(Value.Language)};Validate(Value);}catch(Exception error)when(error is JsonException or IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException){RecoveryNotice="Settings could not be loaded. Defaults are in use.";Value=new();}
@@ -25,6 +27,11 @@ public sealed class PreferencesStore
         var shortcuts=new[]{p.ToolsModifier,p.ConvertModifier,p.ActionsModifier};if(shortcuts.Distinct().Count()!=3||shortcuts.Any(s=>!new[]{"Ctrl","Shift","Alt","Ctrl+Shift","Ctrl+Alt","Shift+Alt"}.Contains(s))||!double.IsFinite(p.WheelScale)||p.WheelScale<.85||p.WheelScale>1.4||p.OutputMode is not ("beside" or "ask" or "folder"))throw new ArgumentException("Choose distinct drag shortcuts and valid output settings.");
         if(p.QuickApps is not null&&p.QuickApps.Length>8)throw new ArgumentException("Quick Launch supports at most 8 apps.");
         if(p.QuickSites is not null&&p.QuickSites.Length>8)throw new ArgumentException("Quick Launch supports at most 8 sites.");
+        if(p.WatchFolders is not null)
+        {
+            foreach(var wf in p.WatchFolders)if(string.IsNullOrWhiteSpace(wf.Path)||!Directory.Exists(wf.Path))throw new ArgumentException("Watch folder does not exist: "+wf.Path);
+            if(p.WatchFolders.Select(w=>w.Path).Distinct(StringComparer.OrdinalIgnoreCase).Count()!=p.WatchFolders.Count)throw new ArgumentException("Duplicate watch folder paths.");
+        }
         foreach(var profile in p.Formats.Values)if(!double.IsFinite(profile.Quality)||profile.Quality<.1||profile.Quality>1||profile.AudioBitrate<8||profile.AudioBitrate>512||profile.Dpi<36||profile.Dpi>600||profile.GifFrameRate<1||profile.GifFrameRate>60||profile.GifWidth<16||profile.GifWidth>8192||profile.MaxVideoHeight<0||profile.MaxVideoHeight>8192||profile.SampleDepth is not ("matchSource" or "pcm16" or "pcm24" or "pcm32" or "float32")||profile.Layout is not ("editable" or "preserve")||profile.EpubLayout is not ("reflowable" or "fixed"))throw new ArgumentException("Choose supported export defaults.");
     }
     public void Save(Preferences value)

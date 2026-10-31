@@ -22,7 +22,7 @@ public sealed partial class MainWindow:Window
     private readonly Toolchain tools=new(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"Nashi","Tools","v1"),Environment.GetEnvironmentVariable("PATH"));
     private readonly LibraryStore library;
     private readonly PreferencesStore preferences;private GlobalDragController? globalDrag;
-    private readonly UndoHistory undoHistory;
+    private readonly UndoHistory undoHistory;private readonly WatchFolders watchFolders;
     private readonly StackPanel home=new(),libraryPage=new(),libraryRows=new(),recentRows=new();
     private readonly TextBox recentSearch=new(){ToolTip="Find a recent file",Width=165};private readonly TextBlock recentCount=Text("0",11,"Muted");private Button? chooseFilesButton,openWheelButton;private readonly TextBlock fileDescription=Text("Images, videos, documents, and all the little things in between.",12,"Muted");
     private readonly TextBox search=new(){ToolTip="Find a file or tool in Library",MinWidth=200};
@@ -42,7 +42,7 @@ public sealed partial class MainWindow:Window
     public MainWindow(string[]? initial=null,LibraryStore? library=null,bool checkForUpdates=true,bool offerToolSetup=true)
     {
         monitorToolSetup=checkForUpdates;
-        this.library=library??new LibraryStore();preferences=new(this.library.DirectoryPath);undoHistory=new(this.library.DirectoryPath);ApplyPreferences();Theme.Apply(this.library.Appearance);Theme.Attach(this);
+        this.library=library??new LibraryStore();preferences=new(this.library.DirectoryPath);undoHistory=new(this.library.DirectoryPath);watchFolders=new(preferences,tools,new OfficeRuntime(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"Nashi","Tools")));ApplyPreferences();Theme.Apply(this.library.Appearance);Theme.Attach(this);
         Title="Nashi";Width=820;Height=780;MinWidth=700;MinHeight=580;WindowStartupLocation=WindowStartupLocation.CenterScreen;AllowDrop=true;
         Icon=BitmapFrame.Create(new Uri("pack://application:,,,/Assets/NashiIcon.png"));
         var root=new DockPanel{Margin=new(28,18,28,18)};Content=root;AddHandler(UIElement.PreviewMouseWheelEvent,new MouseWheelEventHandler(RoutePageMouseWheel),true);
