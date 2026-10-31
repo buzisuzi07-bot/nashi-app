@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Automation;
@@ -18,6 +20,7 @@ public sealed class GlobalDragController:IDisposable
     [DllImport("user32.dll")]private static extern short GetAsyncKeyState(int key);
     [DllImport("user32.dll")]private static extern bool GetCursorPos(out NativePoint point);
     [DllImport("user32.dll")]private static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll",CharSet=CharSet.Unicode)]private static extern int GetClassName(IntPtr window,System.Text.StringBuilder text,int count);
     [DllImport("user32.dll")]private static extern bool RegisterHotKey(IntPtr window,int id,uint modifiers,uint key);
     [DllImport("user32.dll")]private static extern bool UnregisterHotKey(IntPtr window,int id);
     [StructLayout(LayoutKind.Sequential)]private struct NativeRect{public int Left,Top,Right,Bottom;}
@@ -28,7 +31,7 @@ public sealed class GlobalDragController:IDisposable
     private static bool InMoveSize(){var info=new GuiThreadInfo{Size=Marshal.SizeOf<GuiThreadInfo>()};return GetGUIThreadInfo(0,ref info)&&(info.Flags&0x2)!=0;}
     [DllImport("oleacc.dll")]private static extern int AccessibleObjectFromPoint(NativePoint point,[MarshalAs(UnmanagedType.Interface)]out object accessible,[MarshalAs(UnmanagedType.Struct)]out object child);
     private readonly Window owner;private readonly PreferencesStore preferences;private readonly Action<string,IDataObject,string?> dropped;private readonly Action link;private readonly System.Windows.Threading.DispatcherTimer timer;
-    private NativePoint start;private bool down,opened;private Task<string?>? hint;private GlobalDropWheel? wheel;private HwndSource? source;private IntPtr handle;private bool? shortcutEnabled;
+    private NativePoint start;private bool down,opened;private Task<string?>? hint;private GlobalDropWheel? wheel;private GlobalDropWheel? quickLaunchWheel;private HwndSource? source;private IntPtr handle;private bool? shortcutEnabled;
     internal GlobalDropWheel? ActiveWheel=>wheel;
     public bool LinkShortcutRegistered{get;private set;}
     private bool OwnerAvailable=>DesktopGeometry.IsInteractive(owner)&&!DesktopGeometry.IsForegroundFullscreen(new WindowInteropHelper(owner).Handle);
@@ -44,8 +47,17 @@ public sealed class GlobalDragController:IDisposable
     private string Chord(){var parts=new List<string>();if(Held(0x11))parts.Add("Ctrl");if(Held(0x10))parts.Add("Shift");if(Held(0x12))parts.Add("Alt");return string.Join('+',parts);}
     private void Poll()
     {
-        UpdateShortcut();if(!preferences.Value.Enabled||!OwnerAvailable){wheel?.Close();wheel=null;down=false;opened=false;hint=null;return;}var held=PrimaryMouseButton.IsPressed;GetCursorPos(out var point);
-        if(!held){if(down){down=false;opened=false;hint=null;if(wheel is {IsVisible:true}){var old=wheel;var dismiss=new System.Windows.Threading.DispatcherTimer{Interval=TimeSpan.FromMilliseconds(150)};dismiss.Tick+=(_,_)=>{dismiss.Stop();if(old.IsVisible)old.Close();};dismiss.Start();}wheel=null;}return;}
+        UpdateShortcut();if(!preferences.Value.Enabled||!OwnerAvailable){wheel?.Close();quickLaunchWheel?.Close();wheel=null;quickLaunchWheel=null;down=false;opened=false;hint=null;return;}var held=PrimaryMouseButton.IsPressed;GetCursorPos(out var point);
+        if(!held){if(down){down=false;opened=false;hint=null;
+                // Quick Launch tap detection (DragShift parity): tap Shift/Ctrl on empty desktop/app
+                if(preferences.Value.QuickLaunchEnabled){var qChord=Chord();var qPrefs=preferences.Value;
+                    if((qChord==qPrefs.ConvertModifier||qChord==qPrefs.ToolsModifier)&&IsDesktopOrExplorerEmpty(point)){
+                        if(qChord==qPrefs.ConvertModifier)OpenQuickLaunchWheel("apps",point);
+                        else if(qChord==qPrefs.ToolsModifier)OpenQuickLaunchWheel("sites",point);
+                        return;
+                    }
+                }
+                if(wheel is {IsVisible:true}){var old=wheel;var dismiss=new System.Windows.Threading.DispatcherTimer{Interval=TimeSpan.FromMilliseconds(150)};dismiss.Tick+=(_,_)=>{dismiss.Stop();if(old.IsVisible)old.Close();};dismiss.Start();}wheel=null;}return;}
         if(!down){down=true;start=point;opened=false;hint=null;return;}if(opened||Math.Abs(point.X-start.X)+Math.Abs(point.Y-start.Y)<10)return;
         hint??=Task.Run(()=>LinkAt(start));var chord=Chord();var p=preferences.Value;var kind=chord==p.ToolsModifier?"tools":chord==p.ConvertModifier?"convert":chord==p.ActionsModifier?"actions":null;if(kind is null)return;opened=true;if(InMoveSize())return;
         var sourceHint=hint;wheel=new GlobalDropWheel(kind,p.WheelScale,(data,id)=>dropped(id,data,sourceHint?.IsCompletedSuccessfully==true?sourceHint.Result:null),()=>sourceHint?.IsCompletedSuccessfully==true?sourceHint.Result:null);wheel.Show();wheel.Place(point.X,point.Y);
@@ -65,7 +77,31 @@ public sealed class GlobalDragController:IDisposable
             }
         }catch(ElementNotAvailableException){}catch(InvalidOperationException){}catch(COMException){}catch(System.Reflection.TargetInvocationException){}catch(MissingMethodException){}return null;
     }
-    public void Dispose(){timer.Stop();wheel?.Close();if(handle!=IntPtr.Zero)UnregisterHotKey(handle,7701);source?.RemoveHook(Hook);}
+    // Quick Launch (DragShift parity): tap Shift/Ctrl on empty desktop or Explorer → app/site wheel
+    private bool IsDesktopOrExplorerEmpty(NativePoint point)
+    {
+        var hwnd=GetForegroundWindow();if(hwnd==IntPtr.Zero)return false;
+        var type=new System.Text.StringBuilder(256);if(GetClassName(hwnd,type,256)==0)return false;
+        var cls=type.ToString();return cls=="Progman"||cls=="WorkerW"||cls=="CabinetWClass"; // desktop or Explorer
+    }
+    private void OpenQuickLaunchWheel(string kind,NativePoint point)
+    {
+        var p=preferences.Value;var items=kind=="apps"?p.QuickApps:p.QuickSites;if(items.Length==0)return;
+        var choices=items.Select((item,i)=>new ToolChoice(kind+"-"+i,kind=="apps"?System.IO.Path.GetFileNameWithoutExtension(item):item,kind=="apps"?"📱":"🌐")).ToArray();
+        quickLaunchWheel=new GlobalDropWheel("quicklaunch",p.WheelScale,(data,choiceId)=>
+        {
+            try
+            {
+                if(kind=="apps"&&int.TryParse(choiceId.Split('-')[1],out var idx)&&idx>=0&&idx<p.QuickApps.Length)
+                    Process.Start(new ProcessStartInfo(p.QuickApps[idx]){UseShellExecute=true});
+                else if(kind=="sites"&&int.TryParse(choiceId.Split('-')[1],out var idx2)&&idx2>=0&&idx2<p.QuickSites.Length)
+                    Process.Start(new ProcessStartInfo(p.QuickSites[idx2]){UseShellExecute=true});
+            }
+            catch{}quickLaunchWheel=null;
+        },()=>null);
+        quickLaunchWheel.Show();quickLaunchWheel.Place(point.X,point.Y);
+    }
+    public void Dispose(){timer.Stop();wheel?.Close();quickLaunchWheel?.Close();if(handle!=IntPtr.Zero)UnregisterHotKey(handle,7701);source?.RemoveHook(Hook);}
 }
 
 internal sealed class GlobalDropWheel:Window
