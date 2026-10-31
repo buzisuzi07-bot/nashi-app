@@ -78,6 +78,7 @@ internal static class UpdateInstaller
             }
         }
         catch(IOException){}
+        catch(UnauthorizedAccessException){}
         catch(System.Security.SecurityException){}
     }
 }

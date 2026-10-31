@@ -114,13 +114,14 @@ public partial class App:Application
                 if(OwnerLeaseIsLive(stage))continue;
                 var workerExecutable=Path.Combine(stage,"worker","Nashi.exe");
                 if(File.Exists(workerExecutable)&&!InstallFileIsFree(workerExecutable))continue;
-                try{Directory.Delete(stage,true);}catch(IOException){}catch(System.Security.SecurityException){}
+                try{Directory.Delete(stage,true);}catch(IOException){}catch(UnauthorizedAccessException){}catch(System.Security.SecurityException){}
             }
             var prefix=Path.GetFileName(target)+".backup-";
             var backups=Directory.GetDirectories(parent,prefix+"*").Where(d=>GuidExactSuffix(Path.GetFileName(d),prefix)).OrderByDescending(Directory.GetCreationTime).ToArray();
-            foreach(var obsolete in backups.Skip(1))try{Directory.Delete(obsolete,true);}catch(IOException){}catch(System.Security.SecurityException){}
+            foreach(var obsolete in backups.Skip(1))try{Directory.Delete(obsolete,true);}catch(IOException){}catch(UnauthorizedAccessException){}catch(System.Security.SecurityException){}
         }
         catch(IOException){}
+        catch(UnauthorizedAccessException){}
         catch(System.Security.SecurityException){}
         catch(ArgumentException){}
     }

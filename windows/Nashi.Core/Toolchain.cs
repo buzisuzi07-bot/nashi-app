@@ -125,10 +125,17 @@ public static class VerifiedDownload
                 await FetchOnce(client,uri,partial,output,maximum,progress,token,idle);return;
             }
             catch(OperationCanceledException)when(token.IsCancellationRequested){TryDelete(partial);throw;}
-            catch(Exception error)when(!token.IsCancellationRequested&&attempt<4&&error is HttpRequestException or EndOfStreamException or TimeoutException){await Task.Delay(TimeSpan.FromSeconds(1<<attempt)+TimeSpan.FromMilliseconds(Random.Shared.Next(250)),token);}
+            // Permanent 4xx answers (404/403/…) repeat identically on every
+            // retry — fail fast instead of burning five attempts and the full
+            // backoff chain; transient 5xx/408/429 responses and connection
+            // errors still retry.
+            catch(Exception error)when(!token.IsCancellationRequested&&attempt<4&&(error is EndOfStreamException or TimeoutException||(error is HttpRequestException http&&TransientStatus(http.StatusCode)))){await Task.Delay(TimeSpan.FromSeconds(1<<attempt)+TimeSpan.FromMilliseconds(Random.Shared.Next(250)),token);}
         }
     }
     private static void TryDelete(string path){try{File.Delete(path);}catch(IOException){}catch(UnauthorizedAccessException){}}
+    // Network failures carry a null status; a null status or one of the
+    // transient HTTP codes is worth another attempt, a settled 4xx is not.
+    private static bool TransientStatus(System.Net.HttpStatusCode? status)=>status is null||status==System.Net.HttpStatusCode.RequestTimeout||status==System.Net.HttpStatusCode.TooManyRequests||status>=System.Net.HttpStatusCode.InternalServerError;
     private static async Task FetchOnce(HttpClient client,Uri uri,string partial,string output,long maximum,Action<double>? progress,CancellationToken token,TimeSpan idle)
     {
         var resumeFrom=0L;
@@ -140,11 +147,14 @@ public static class VerifiedDownload
             if(response.RequestMessage?.RequestUri?.Scheme!="https")throw new InvalidDataException("Unsafe download redirect.");
             var range=response.Content.Headers.ContentRange;
             // Only a 206 that maps exactly onto our partial bytes is a genuine
-            // continuation; a total smaller than what we hold would corrupt the
-            // tail, so the partial is dropped and the transfer restarts cleanly.
-            var ranged=response.StatusCode==System.Net.HttpStatusCode.PartialContent&&range?.From==resumeFrom&&resumeFrom>0&&range.Length is long rangeTotal&&rangeTotal>=resumeFrom;
+            // continuation: a different start byte would append misaligned
+            // data and a total smaller than what we hold would corrupt the
+            // tail, so the response is dropped and the transfer restarts
+            // cleanly without a Range header.
+            var rangeTotal=0L;var ranged=response.StatusCode==System.Net.HttpStatusCode.PartialContent&&resumeFrom>0&&range?.From==resumeFrom&&(rangeTotal=range.Length??-1)>=resumeFrom;
+            if(!ranged&&response.StatusCode==System.Net.HttpStatusCode.PartialContent&&(resumeFrom>0||range?.From>0)){TryDelete(partial);resumeFrom=0;throw new HttpRequestException("The server answered the range request with an unmatched 206; restarting without a range.");}
             if(!ranged&&resumeFrom>0){File.Delete(partial);resumeFrom=0;}
-            var full=ranged?range!.Length!.Value:response.Content.Headers.ContentLength;
+            var full=ranged?rangeTotal:response.Content.Headers.ContentLength;
             if(full>maximum)throw new InvalidDataException("Download is larger than the supported limit.");
             await using var input=await response.Content.ReadAsStreamAsync(inactivity.Token);await using var target=new FileStream(partial,ranged?FileMode.Append:FileMode.Create,FileAccess.Write,FileShare.None,81920,true);
             var buffer=new byte[81920];long total=0;
@@ -154,6 +164,11 @@ public static class VerifiedDownload
                 total+=count;if(resumeFrom+total>maximum)throw new InvalidDataException("Download exceeded its limit.");await target.WriteAsync(buffer.AsMemory(0,count),token);if(full>0)progress?.Invoke((double)(resumeFrom+total)/full.Value);
             }
             var length=response.Content.Headers.ContentLength;if(length is not null&&total!=length)throw new EndOfStreamException("Download ended early.");
+            // The advertised Content-Range total is the promise of completeness:
+            // a narrow range (bytes 3-4/10 against a 3-byte partial) passes the
+            // body-length check yet leaves the file truncated, so the partial
+            // stays in place and the next attempt resumes past it.
+            if(ranged&&resumeFrom+total!=rangeTotal)throw new EndOfStreamException("The ranged response ended before the advertised total.");
         }
         catch(OperationCanceledException error)when(!token.IsCancellationRequested){throw new TimeoutException("The download stopped responding. Please try again.",error);}
         // Failures keep the partial so the next attempt resumes; the caller's
