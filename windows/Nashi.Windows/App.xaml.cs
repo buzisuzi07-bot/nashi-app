@@ -1,3 +1,5 @@
+using System;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Threading;
 using Nashi.Core;
@@ -12,10 +14,25 @@ public partial class App:Application
         if(Environment.GetEnvironmentVariable("NASHI_SMOKE_DIRECTORY") is {} diagnostics)
         {
             Directory.CreateDirectory(diagnostics);
-            AppDomain.CurrentDomain.UnhandledException+=(_,error)=>File.WriteAllText(Path.Combine(diagnostics,$"unhandled-{Environment.ProcessId}.txt"),error.ExceptionObject.ToString());
+            AppDomain.CurrentDomain.UnhandledException+=(_,error)=>{
+                CrashGuard.Record(error.ExceptionObject as Exception ?? new Exception(error.ExceptionObject.ToString()));
+                File.WriteAllText(Path.Combine(diagnostics,$"unhandled-{Environment.ProcessId}.txt"),error.ExceptionObject.ToString());
+            };
             Exit+=(_,exit)=>File.WriteAllText(Path.Combine(diagnostics,$"process-exit-{Environment.ProcessId}.json"),System.Text.Json.JsonSerializer.Serialize(new{mode=e.Args.FirstOrDefault(),code=exit.ApplicationExitCode,environmentCode=Environment.ExitCode}));
         }
-        DispatcherUnhandledException+=(_,error)=>{var folder=Environment.GetEnvironmentVariable("NASHI_SMOKE_DIRECTORY");if(folder is not null){Directory.CreateDirectory(folder);File.WriteAllText(Path.Combine(folder,"dispatcher-error.txt"),error.Exception.ToString());error.Handled=true;Shutdown(1);}};
+        DispatcherUnhandledException+=(_,error)=>{
+            CrashGuard.Record(error.Exception);
+            error.Handled=true;
+            if(Environment.GetEnvironmentVariable("NASHI_SMOKE_DIRECTORY") is {} folder){
+                Directory.CreateDirectory(folder);
+                File.WriteAllText(Path.Combine(folder,"dispatcher-error.txt"),error.Exception.ToString());
+            }
+            var result=MessageBox.Show($"Nashi beklenmedik bir hatayla karşılaştı:\n{error.Exception.Message}\n\nUygulamayı yeniden başlatmak ister misiniz?","Nashi — Çöküş",MessageBoxButton.YesNo,MessageBoxImage.Error);
+            if(result==MessageBoxResult.Yes){
+                try{Process.Start(new ProcessStartInfo(Environment.ProcessPath!){UseShellExecute=true})?.Dispose();}catch{}
+            }
+            Shutdown(1);
+        };
         base.OnStartup(e);
         if(e.Args.Contains("--smoke-test-interactions"))
         {
