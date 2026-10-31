@@ -6,7 +6,7 @@ using System.Windows.Shapes;
 using System.Windows.Media.Imaging;
 using Nashi.Core;
 namespace Nashi.Windows;
-public sealed record ToolChoice(string Id,string Title,string Symbol,WindowPlacement? Placement=null);
+public sealed record ToolChoice(string Id,string Title,string Symbol,WindowPlacement? Placement=null,ImageSource? Icon=null);
 public sealed class WheelWindow:Window
 {
     private readonly List<Button> buttons=[];

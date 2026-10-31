@@ -87,7 +87,11 @@ public sealed class GlobalDragController:IDisposable
     private void OpenQuickLaunchWheel(string kind,NativePoint point)
     {
         var p=preferences.Value;var items=kind=="apps"?p.QuickApps:p.QuickSites;if(items.Length==0)return;
-        var choices=items.Select((item,i)=>new ToolChoice(kind+"-"+i,kind=="apps"?System.IO.Path.GetFileNameWithoutExtension(item):item,kind=="apps"?"📱":"🌐")).ToArray();
+        var choices=items.Select((item,i)=>
+        {
+            var icon=kind=="apps"?IconExtractor.Extract(item):null;
+            return new ToolChoice(kind+"-"+i,kind=="apps"?System.IO.Path.GetFileNameWithoutExtension(item):item,kind=="apps"?"📱":"🌐",null,icon);
+        }).ToArray();
         quickLaunchWheel=new GlobalDropWheel("quicklaunch",p.WheelScale,(data,choiceId)=>
         {
             try
