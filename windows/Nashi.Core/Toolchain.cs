@@ -75,8 +75,8 @@ public sealed class Toolchain(string directory,string? searchPath=null)
 }
 public static class VerifiedDownload
 {
-    public static Task FetchAsync(Uri uri,string output,long maximum,Action<double>? progress,CancellationToken token)=>FetchCore(uri,output,maximum,progress,token,null,TimeSpan.FromSeconds(60));
-    public static Task FetchAnyAsync(IReadOnlyList<Uri> uris,string output,long maximum,Action<double>? progress,CancellationToken token,Func<string,bool>? validator=null)=>FetchAnyCore(uris,output,maximum,progress,token,null,TimeSpan.FromSeconds(60),validator);
+    public static Task FetchAsync(Uri uri,string output,long maximum,Action<double>? progress,CancellationToken token)=>FetchCore(uri,output,maximum,progress,token,null,TimeSpan.FromSeconds(90));
+    public static Task FetchAnyAsync(IReadOnlyList<Uri> uris,string output,long maximum,Action<double>? progress,CancellationToken token,Func<string,bool>? validator=null)=>FetchAnyCore(uris,output,maximum,progress,token,null,TimeSpan.FromSeconds(90),validator);
     internal static Task FetchForTest(Uri uri,string output,long maximum,Action<double>? progress,CancellationToken token,HttpMessageHandler handler,TimeSpan idle)=>FetchCore(uri,output,maximum,progress,token,handler,idle);
     internal static Task FetchAnyForTest(IReadOnlyList<Uri> uris,string output,long maximum,Action<double>? progress,CancellationToken token,HttpMessageHandler handler,TimeSpan idle,Func<string,bool>? validator=null)=>FetchAnyCore(uris,output,maximum,progress,token,handler,idle,validator);
     private static async Task FetchAnyCore(IReadOnlyList<Uri> uris,string output,long maximum,Action<double>? progress,CancellationToken token,HttpMessageHandler? handler,TimeSpan idle,Func<string,bool>? validator=null)
@@ -100,11 +100,10 @@ public static class VerifiedDownload
             }
             finally
             {
-                for(var d=0;d<3&&File.Exists(temporary);d++)
-                {
-                    try{File.Delete(temporary);break;}
-                    catch(IOException){await Task.Delay(50*(d+1),CancellationToken.None);}
-                }
+                // Nested ".part" of a per-mirror temporary must also vanish, or the
+                // validator test's "no leftover *.part" invariant breaks.
+                for(var d=0;d<3&&File.Exists(temporary);d++){try{File.Delete(temporary);break;}catch(IOException){await Task.Delay(50*(d+1),CancellationToken.None);}}
+                for(var d=0;d<3&&File.Exists(temporary+".part");d++){try{File.Delete(temporary+".part");break;}catch(IOException){await Task.Delay(50*(d+1),CancellationToken.None);}}
             }
         }
         throw last??new InvalidDataException("All download mirrors failed.");
@@ -113,31 +112,53 @@ public static class VerifiedDownload
     {
         if(uri.Scheme!="https"||!string.IsNullOrEmpty(uri.UserInfo))throw new InvalidDataException("An HTTPS download is required.");
         using var client=handler is null?new HttpClient(new SocketsHttpHandler{ConnectTimeout=TimeSpan.FromSeconds(30)}):new HttpClient(handler,false);client.Timeout=Timeout.InfiniteTimeSpan;client.DefaultRequestHeaders.UserAgent.ParseAdd("Nashi/0.7");
-        for(var attempt=0;attempt<3;attempt++)
+        // Interrupted transfers resume from a ".part" sibling: restarting a
+        // ~400 MB archive from zero on every flaky-network blip used to read
+        // as a timeout even while connectivity was healthy.
+        var partial=output+".part";
+        for(var attempt=0;attempt<5;attempt++)
         {
-            try{await FetchOnce(client,uri,output,maximum,progress,token,idle);return;}
-            catch(Exception error)when(!token.IsCancellationRequested&&attempt<2&&error is HttpRequestException or EndOfStreamException or TimeoutException){await Task.Delay(500*(attempt+1),token);}
+            client.DefaultRequestHeaders.Range=null;
+            try
+            {
+                if(File.Exists(partial)&&new FileInfo(partial).Length>0)client.DefaultRequestHeaders.Range=new System.Net.Http.Headers.RangeHeaderValue(new FileInfo(partial).Length,null);
+                await FetchOnce(client,uri,partial,output,maximum,progress,token,idle);return;
+            }
+            catch(OperationCanceledException)when(token.IsCancellationRequested){TryDelete(partial);throw;}
+            catch(Exception error)when(!token.IsCancellationRequested&&attempt<4&&error is HttpRequestException or EndOfStreamException or TimeoutException){await Task.Delay(TimeSpan.FromSeconds(1<<attempt)+TimeSpan.FromMilliseconds(Random.Shared.Next(250)),token);}
         }
     }
-    private static async Task FetchOnce(HttpClient client,Uri uri,string output,long maximum,Action<double>? progress,CancellationToken token,TimeSpan idle)
+    private static void TryDelete(string path){try{File.Delete(path);}catch(IOException){}catch(UnauthorizedAccessException){}}
+    private static async Task FetchOnce(HttpClient client,Uri uri,string partial,string output,long maximum,Action<double>? progress,CancellationToken token,TimeSpan idle)
     {
-        var created=false;
+        var resumeFrom=0L;
+        if(File.Exists(partial))resumeFrom=new FileInfo(partial).Length;
         try
         {
             using var inactivity=CancellationTokenSource.CreateLinkedTokenSource(token);inactivity.CancelAfter(idle);
             using var response=await client.GetAsync(uri,HttpCompletionOption.ResponseHeadersRead,inactivity.Token);response.EnsureSuccessStatusCode();
             if(response.RequestMessage?.RequestUri?.Scheme!="https")throw new InvalidDataException("Unsafe download redirect.");
-            var length=response.Content.Headers.ContentLength;if(length>maximum)throw new InvalidDataException("Download is larger than the supported limit.");
-            await using var input=await response.Content.ReadAsStreamAsync(inactivity.Token);await using var target=new FileStream(output,FileMode.CreateNew,FileAccess.Write,FileShare.None,81920,true);created=true;
+            var range=response.Content.Headers.ContentRange;
+            // Only a 206 that maps exactly onto our partial bytes is a genuine
+            // continuation; a total smaller than what we hold would corrupt the
+            // tail, so the partial is dropped and the transfer restarts cleanly.
+            var ranged=response.StatusCode==System.Net.HttpStatusCode.PartialContent&&range?.From==resumeFrom&&resumeFrom>0&&range.Length is long rangeTotal&&rangeTotal>=resumeFrom;
+            if(!ranged&&resumeFrom>0){File.Delete(partial);resumeFrom=0;}
+            var full=ranged?range.Length!.Value:response.Content.Headers.ContentLength;
+            if(full>maximum)throw new InvalidDataException("Download is larger than the supported limit.");
+            await using var input=await response.Content.ReadAsStreamAsync(inactivity.Token);await using var target=new FileStream(partial,ranged?FileMode.Append:FileMode.Create,FileAccess.Write,FileShare.None,81920,true);
             var buffer=new byte[81920];long total=0;
             while(true)
             {
                 inactivity.CancelAfter(idle);int count;try{count=await input.ReadAsync(buffer,inactivity.Token);}catch(IOException error){throw new HttpRequestException("The download connection was interrupted.",error);}if(count==0)break;
-                total+=count;if(total>maximum)throw new InvalidDataException("Download exceeded its limit.");await target.WriteAsync(buffer.AsMemory(0,count),token);if(length>0)progress?.Invoke((double)total/length.Value);
+                total+=count;if(resumeFrom+total>maximum)throw new InvalidDataException("Download exceeded its limit.");await target.WriteAsync(buffer.AsMemory(0,count),token);if(full>0)progress?.Invoke((double)(resumeFrom+total)/full.Value);
             }
-            if(length is not null&&total!=length)throw new EndOfStreamException("Download ended early.");
+            var length=response.Content.Headers.ContentLength;if(length is not null&&total!=length)throw new EndOfStreamException("Download ended early.");
         }
-        catch(OperationCanceledException error)when(!token.IsCancellationRequested){if(created)File.Delete(output);throw new TimeoutException("The download stopped responding. Please try again.",error);}
-        catch{if(created)File.Delete(output);throw;}
+        catch(OperationCanceledException error)when(!token.IsCancellationRequested){throw new TimeoutException("The download stopped responding. Please try again.",error);}
+        // Failures keep the partial so the next attempt resumes; the caller's
+        // staging-directory cleanup or the SHA-256 check is the final safety net.
+        if(File.Exists(output)){TryDelete(partial);throw new IOException("Download target already exists.");}
+        File.Move(partial,output);
     }
 }
