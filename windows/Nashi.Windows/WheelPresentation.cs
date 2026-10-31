@@ -11,9 +11,15 @@ internal static class WheelPresentation
     internal static Preferences Preferences{get;set;}=new();
     internal static Brush Backdrop{get{var brush=Theme.Brush("Surface").Clone();brush.Opacity=Preferences.WheelFinish=="glass"?.95:1;return brush;}}
     internal static double LabelRadius(int count,double half)=>count<=2?180:4*Math.Sin(half)*(Math.Pow(250,3)-Math.Pow(108,3))/(6*half*(250*250-108*108));
-    internal static (StackPanel Label,Point Center) Caption(ToolChoice choice,Geometry petal,double angle,double half,int count)
+    // The overflow ring shares the caption maths with the main ring but sits on its
+    // own band, so this variant derives the radius from that band instead of 108..250.
+    internal static double LabelRadius(int count,double half,double inner,double outer)=>count<=2?(inner+outer)/2:4*Math.Sin(half)*(Math.Pow(outer,3)-Math.Pow(inner,3))/(6*half*(outer*outer-inner*inner));
+    // The overflow ring shares the caption maths with the main ring but sits on its
+    // own band, so the label radius and the canvas centre come from that band instead
+    // of the fixed 108..250 ring.
+    internal static (StackPanel Label,Point Center) Caption(ToolChoice choice,Geometry petal,double angle,double half,int count)=>Caption(choice,petal,angle,half,count,270,LabelRadius(count,half));
+    internal static (StackPanel Label,Point Center) Caption(ToolChoice choice,Geometry petal,double angle,double half,int count,double center,double preferred)
     {
-        var preferred=LabelRadius(count,half);
         for(var font=16d;font>=10;font-=.5)for(var width=142d;width>=72;width-=7)
         {
             var label=new StackPanel{Width=width,IsHitTestVisible=false};
@@ -23,11 +29,11 @@ internal static class WheelPresentation
             label.Measure(new Size(width,double.PositiveInfinity));var h=label.DesiredSize.Height;
             for(var step=0;step<=20;step++)
             {
-                var radial=preferred+(step==0?0:(step%2==1?1:-1)*((step+1)/2)*5);var center=new Point(270+radial*Math.Cos(angle),270+radial*Math.Sin(angle));var r=new Rect(center.X-width/2-3,center.Y-h/2-3,width+6,h+6);
-                if(new[]{r.TopLeft,r.TopRight,r.BottomLeft,r.BottomRight,new Point(r.Left,r.Top+r.Height/2),new Point(r.Right,r.Top+r.Height/2)}.All(petal.FillContains))return(label,center);
+                var radial=preferred+(step==0?0:(step%2==1?1:-1)*((step+1)/2)*5);var spot=new Point(center+radial*Math.Cos(angle),center+radial*Math.Sin(angle));var r=new Rect(spot.X-width/2-3,spot.Y-h/2-3,width+6,h+6);
+                if(new[]{r.TopLeft,r.TopRight,r.BottomLeft,r.BottomRight,new Point(r.Left,r.Top+r.Height/2),new Point(r.Right,r.Top+r.Height/2)}.All(petal.FillContains))return(label,spot);
             }
         }
-        var fallback=new StackPanel{Width=72};fallback.Children.Add(new System.Windows.Controls.TextBlock{Text=L10n.Uppercase(choice.Title),FontSize=10,TextAlignment=TextAlignment.Center,TextWrapping=TextWrapping.Wrap,Foreground=Theme.Brush("Ink")});fallback.Measure(new Size(72,double.PositiveInfinity));return(fallback,new Point(270+preferred*Math.Cos(angle),270+preferred*Math.Sin(angle)));
+        var fallback=new StackPanel{Width=72};fallback.Children.Add(new System.Windows.Controls.TextBlock{Text=L10n.Uppercase(choice.Title),FontSize=10,TextAlignment=TextAlignment.Center,TextWrapping=TextWrapping.Wrap,Foreground=Theme.Brush("Ink")});fallback.Measure(new Size(72,double.PositiveInfinity));return(fallback,new Point(center+preferred*Math.Cos(angle),center+preferred*Math.Sin(angle)));
     }
     internal static void Animate(Window window,double from=0){if(Preferences.Animations&&SystemParameters.ClientAreaAnimation)window.BeginAnimation(UIElement.OpacityProperty,new DoubleAnimation(from,1,TimeSpan.FromMilliseconds(140)));}
 }
