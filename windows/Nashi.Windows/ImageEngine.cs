@@ -18,7 +18,7 @@ public sealed record ImageOptions(int? Width=null,int? Height=null,int Rotation=
 }
 public static partial class ImageEngine
 {
-    public static readonly string[] Formats=["png","jpg","webp","heic","avif","bmp","gif","tiff","pdf"];
+    public static readonly string[] Formats=["png","jpg","webp","heic","avif","bmp","gif","tiff","pdf","ico"];
     public static BitmapSource Load(string file)
     {
         if(FeatureCatalog.Extension(file) is "webp" or "heic" or "avif" or "svg")return FromPng(PhotoCodec.Png(file));
@@ -126,7 +126,8 @@ public static partial class ImageEngine
         if(format=="jpg")for(var n=0;n<pixels.Length;n+=4){var alpha=pixels[n+3];if(alpha==255)continue;for(var c=0;c<3;c++)pixels[n+c]=(byte)((pixels[n+c]*alpha+255*(255-alpha)+127)/255);pixels[n+3]=255;}
         image=BitmapSource.Create(converted.PixelWidth,converted.PixelHeight,96,96,PixelFormats.Bgra32,null,pixels,stride);image.Freeze();
         // Hand the raw pixels to Magick: an intermediate WPF PNG of a 48 MP photo took 15-19 s alone.
-        if(format is "webp" or "heic" or "avif"){PhotoCodec.EncodePixels(pixels,image.PixelWidth,image.PixelHeight,output,format,quality,encoderPath,token);return;}
+        // ICO needs Magick for the multi-size square-frame bundling WPF cannot do.
+        if(format is "webp" or "heic" or "avif" or "ico"){PhotoCodec.EncodePixels(pixels,image.PixelWidth,image.PixelHeight,output,format,quality,encoderPath,token);return;}
         if(format=="pdf")
         {
             using var png=new MemoryStream();var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(image));encoder.Save(png);png.Position=0;

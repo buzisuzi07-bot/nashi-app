@@ -46,6 +46,7 @@ public static class PhotoCodec
     public static void EncodePng(byte[] pixels,string output,string format,int quality=85,string? encoder=null,CancellationToken token=default)
     {
         using var image=new MagickImage(pixels,new MagickReadSettings{Format=MagickFormat.Png});image.Strip();image.Quality=(uint)Math.Clamp(quality,1,100);
+        if(format=="ico"){WriteIco(image,output);return;}
         if(format=="heic"){if(encoder is null)throw new InvalidOperationException("Set up media tools once to enable HEIC encoding on Windows.");var width=(int)image.Width;var height=(int)image.Height;Task.Run(()=>HeifCodec.EncodeAsync(encoder,pixels,output,width,height,quality,token),token).GetAwaiter().GetResult();return;}image.Write(output,Format(format));
     }
     /// Encodes straight (non-premultiplied) BGRA32 pixels without an intermediate PNG.
@@ -55,7 +56,33 @@ public static class PhotoCodec
         MagickImage Read(){var image=new MagickImage();image.ReadPixels(bgra,new PixelReadSettings((uint)width,(uint)height,StorageType.Char,PixelMapping.BGRA));image.ColorSpace=ColorSpace.sRGB;return image;}
         // HEIC goes through EncodePng's own MagickImage; release this pixel cache before that one is created.
         if(format=="heic"){byte[] png;using(var source=Read())png=source.ToByteArray(MagickFormat.Png);EncodePng(png,output,format,quality,encoder,token);return;}
-        using var image=Read();image.Strip();image.Quality=(uint)Math.Clamp(quality,1,100);image.Write(output,Format(format));
+        using var image=Read();image.Strip();image.Quality=(uint)Math.Clamp(quality,1,100);
+        if(format=="ico"){WriteIco(image,output);return;}
+        image.Write(output,Format(format));
+    }
+    // Windows icons are square multi-resolution bundles: each entry scales the
+    // source (keeping the aspect ratio) onto a transparent square canvas. Tiny
+    // sources get a single 16 px entry rather than blurry upscaled standards.
+    private static void WriteIco(MagickImage source,string output)
+    {
+        using var frames=new MagickImageCollection();
+        var longEdge=(int)Math.Max(source.Width,source.Height);
+        foreach(var size in new[]{256,128,64,48,32,24,16})
+        {
+            if(size>longEdge)continue;
+            var frame=(MagickImage)source.Clone();
+            frame.Resize(new MagickGeometry((uint)size,(uint)size));
+            frame.Extent((uint)size,(uint)size,Gravity.Center,MagickColors.Transparent);
+            frames.Add(frame);
+        }
+        if(frames.Count==0)
+        {
+            var frame=(MagickImage)source.Clone();
+            frame.Resize(new MagickGeometry(16,16));
+            frame.Extent(16,16,Gravity.Center,MagickColors.Transparent);
+            frames.Add(frame);
+        }
+        frames.Write(output,MagickFormat.Ico);
     }
     public static MagickFormat Format(string format)=>format switch{"jpg"=>MagickFormat.Jpeg,"webp"=>MagickFormat.WebP,"heic"=>MagickFormat.Heic,"avif"=>MagickFormat.Avif,"tiff"=>MagickFormat.Tiff,"bmp"=>MagickFormat.Bmp,"gif"=>MagickFormat.Gif,"png"=>MagickFormat.Png,_=>throw new ArgumentException("Unsupported image format.")};
     public static byte[] Adjust(byte[] png,PhotoAdjustments o)
