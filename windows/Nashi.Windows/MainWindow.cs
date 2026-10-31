@@ -22,8 +22,8 @@ public sealed partial class MainWindow:Window
     private readonly Toolchain tools=new(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"Nashi","Tools","v1"),Environment.GetEnvironmentVariable("PATH"));
     private readonly LibraryStore library;
     private readonly PreferencesStore preferences;private GlobalDragController? globalDrag;
-    private readonly UndoHistory undoHistory;private readonly WatchFolders watchFolders;
-    private readonly StackPanel home=new(),libraryPage=new(),libraryRows=new(),recentRows=new();
+    private readonly UndoHistory undoHistory;private readonly WatchFolders watchFolders;private readonly QueueStore queueStore;
+    private readonly StackPanel home=new(),libraryPage=new(),libraryRows=new(),recentRows=new(),queueRows=new();
     private readonly TextBox recentSearch=new(){ToolTip="Find a recent file",Width=165};private readonly TextBlock recentCount=Text("0",11,"Muted");private Button? chooseFilesButton,openWheelButton;private readonly TextBlock fileDescription=Text("Images, videos, documents, and all the little things in between.",12,"Muted");
     private readonly TextBox search=new(){ToolTip="Find a file or tool in Library",MinWidth=200};
     private readonly DockPanel manage=new();private readonly FileGarden garden=new();private readonly StackPanel webContent=new();private Window? webWindow;
@@ -42,7 +42,7 @@ public sealed partial class MainWindow:Window
     public MainWindow(string[]? initial=null,LibraryStore? library=null,bool checkForUpdates=true,bool offerToolSetup=true)
     {
         monitorToolSetup=checkForUpdates;
-        this.library=library??new LibraryStore();preferences=new(this.library.DirectoryPath);undoHistory=new(this.library.DirectoryPath);watchFolders=new(preferences,tools,new OfficeRuntime(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"Nashi","Tools")));ApplyPreferences();Theme.Apply(this.library.Appearance);Theme.Attach(this);
+        this.library=library??new LibraryStore();preferences=new(this.library.DirectoryPath);undoHistory=new(this.library.DirectoryPath);watchFolders=new(preferences,tools,new OfficeRuntime(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"Nashi","Tools")));queueStore=new(this.library.DirectoryPath);ApplyPreferences();Theme.Apply(this.library.Appearance);Theme.Attach(this);
         Title="Nashi";Width=820;Height=780;MinWidth=700;MinHeight=580;WindowStartupLocation=WindowStartupLocation.CenterScreen;AllowDrop=true;
         Icon=BitmapFrame.Create(new Uri("pack://application:,,,/Assets/NashiIcon.png"));
         var root=new DockPanel{Margin=new(28,18,28,18)};Content=root;AddHandler(UIElement.PreviewMouseWheelEvent,new MouseWheelEventHandler(RoutePageMouseWheel),true);
@@ -71,6 +71,7 @@ public sealed partial class MainWindow:Window
         web.Children.Add(Text("Ctrl+Shift+D  Use a copied link  ·  Public, downloadable media",11,"Muted"));webContent.Margin=new(24);webContent.Children.Add(Text("Download from the web",27));webContent.Children.Add(Text("A link. A file. Yours to work with.",14,"Muted"));var webCard=Card(web);webCard.Margin=new(0,20,0,0);webContent.Children.Add(webCard);BuildWebOptions();
         var webHeader=new DockPanel();var shortcut=Text("Ctrl+Shift+D",12,"Muted");DockPanel.SetDock(shortcut,Dock.Right);webHeader.Children.Add(shortcut);var arrow=Text("↓",28,"Gold");arrow.Margin=new(0,0,14,0);DockPanel.SetDock(arrow,Dock.Left);webHeader.Children.Add(arrow);var caption=new StackPanel();caption.SetValue(TextBlock.TextAlignmentProperty,TextAlignment.Left);caption.Children.Add(Text("Download a link",15));caption.Children.Add(Text("Video, audio, or an image. Straight into your tools.",12,"Muted"));webHeader.Children.Add(caption);var webButton=Button("",OpenDownload);webButton.Content=webHeader;webButton.HorizontalContentAlignment=HorizontalAlignment.Stretch;webButton.Margin=new(0);webButton.Padding=new(18);webButton.BorderThickness=new(0);var webLanding=Card(webButton);webLanding.Padding=new(0);workArea.Children.Add(webLanding);workArea.Children.Add(actions);
         var recentHeading=new DockPanel{Margin=new(0,24,0,10)};var all=Button("See all  ↗",()=>ShowLibrary(true));DockPanel.SetDock(all,Dock.Right);recentHeading.Children.Add(all);recentSearch.TextChanged+=(_,_)=>RenderLibrary();DockPanel.SetDock(recentSearch,Dock.Right);recentHeading.Children.Add(recentSearch);var recentTitle=new StackPanel{Orientation=Orientation.Horizontal,VerticalAlignment=VerticalAlignment.Center};recentTitle.Children.Add(Text("Freshly made",19));recentCount.Margin=new(10,0,0,0);recentTitle.Children.Add(recentCount);recentHeading.Children.Add(recentTitle);home.Children.Add(recentHeading);var recentCard=Card(recentRows);recentCard.Padding=new(7);home.Children.Add(recentCard);
+        var queueHeading=new DockPanel{Margin=new(0,24,0,10)};var queueTitle=new StackPanel{Orientation=Orientation.Horizontal,VerticalAlignment=VerticalAlignment.Center};queueTitle.Children.Add(Text("Queue",19));queueHeading.Children.Add(queueTitle);home.Children.Add(queueHeading);var queueCard=Card(queueRows);queueCard.Padding=new(7);home.Children.Add(queueCard);
         var footer=new WrapPanel{Margin=new(0,14,0,0)};footer.Children.Add(Button("Set up media tools",async()=>await SetupAsync()));footer.Children.Add(Button("Set up office tools",async()=>await SetupOfficeAsync()));footer.Children.Add(Button("Features & shortcuts",ShowShortcuts));home.Children.Add(new Expander{Header="Tools & shortcuts",Content=footer,Margin=new(4,8,4,0)});
         libraryPage.Children.Add(Text("Your Library",30));libraryPage.Children.Add(Text("Freshly made, pasted, and ready for another round.",14,"Muted"));
         var searchLabel=Text("Find a file or tool  ·  Ctrl+F",12,"Muted");searchLabel.Margin=new(4,20,4,0);libraryPage.Children.Add(searchLabel);libraryPage.Children.Add(search);libraryPage.Children.Add(libraryRows);search.TextChanged+=(_,_)=>RenderLibrary();
@@ -79,7 +80,7 @@ public sealed partial class MainWindow:Window
         DragOver+=(_,e)=>{e.Effects=!busy&&(e.Data.GetDataPresent(DataFormats.FileDrop)||e.Data.GetDataPresent(DataFormats.UnicodeText)||e.Data.GetDataPresent(DataFormats.Html)||e.Data.GetDataPresent("UniformResourceLocatorW"))?DragDropEffects.Copy:DragDropEffects.None;e.Handled=true;};
         Drop+=(_,e)=>{if(!busy){if(!e.Data.GetDataPresent(DataFormats.FileDrop)&&DragPayload.Parse(e.Data) is not null)OnGlobalDrop("download:auto",e.Data,null);else Import(e.Data);}e.Handled=true;};
         PreviewKeyDown+=(_,e)=>{if(HandleShortcut(e.Key,Keyboard.Modifiers,Keyboard.FocusedElement as DependencyObject))e.Handled=true;};
-        if(initial is not null)Add(initial);else Refresh();ShowLibrary(false);RenderLibrary();Loaded+=(_,_)=>Theme.Entrance(LibraryVisible?libraryPage:home);
+        if(initial is not null)Add(initial);else Refresh();ShowLibrary(false);RenderLibrary();RenderQueue();Loaded+=(_,_)=>Theme.Entrance(LibraryVisible?libraryPage:home);
         if(this.library.RecoveryNotice is {} notice)L10n.SetText(status,notice);
         else if(preferences.RecoveryNotice is {} settingsNotice)L10n.SetText(status,settingsNotice);
         if(checkForUpdates)
@@ -179,6 +180,61 @@ public sealed partial class MainWindow:Window
         recentCount.Text=library.Entries.Count.ToString();foreach(var entry in SearchLibrary(recentSearch.Text).Take(3))recentRows.Children.Add(LibraryRow(entry,true));
         if(library.Entries.Count==0)recentRows.Children.Add(Card(Text("Your next fresh copy will land here.",13,"Muted")));
     }
+
+    private void RenderQueue()
+    {
+        queueRows.Children.Clear();
+        var pending = queueStore.Entries.Take(5).ToArray();
+        if (pending.Length == 0)
+        {
+            queueRows.Children.Add(Card(Text("Queue is empty.", 13, "Muted")));
+            return;
+        }
+        foreach (var entry in pending)
+        {
+            queueRows.Children.Add(QueueRow(entry));
+        }
+    }
+
+    private Border QueueRow(QueueEntry entry)
+    {
+        var row = new DockPanel();
+        var buttons = new WrapPanel { VerticalAlignment = VerticalAlignment.Center };
+        DockPanel.SetDock(buttons, Dock.Right);
+        row.Children.Add(buttons);
+
+        var cancel = Button("✕", () => { queueStore.Cancel(entry.Id); RenderQueue(); });
+        cancel.IsEnabled = !busy;
+        L10n.Bind(cancel, System.Windows.FrameworkElement.ToolTipProperty, "Cancel");
+        buttons.Children.Add(cancel);
+
+        var statusText = entry.Status switch
+        {
+            QueueStatus.Pending => "Pending",
+            QueueStatus.Converting => "Converting",
+            QueueStatus.Done => "Done",
+            QueueStatus.Failed => "Failed",
+            _ => "?"
+        };
+
+        var icon = new Image { Width = 24, Height = 24, Margin = new(0, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center };
+        FileArtwork.Bind(icon, entry.SourcePath);
+        DockPanel.SetDock(icon, Dock.Left);
+        row.Children.Add(icon);
+
+        var text = new StackPanel { Margin = new(0, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center };
+        var name = Text(entry.Name, 11, localize: false);
+        name.TextWrapping = TextWrapping.NoWrap;
+        name.TextTrimming = TextTrimming.CharacterEllipsis;
+        text.Children.Add(name);
+        var info = new StackPanel { Orientation = Orientation.Horizontal };
+        info.Children.Add(Text(entry.Action, 10, "Muted"));
+        info.Children.Add(Text("  ·  " + statusText, 10, "Muted", localize: false));
+        text.Children.Add(info);
+        row.Children.Add(text);
+
+        return Card(row);
+    }
     private Border LibraryRow(LibraryEntry entry,bool compact=false)
     {
         var row=new DockPanel();var available=entry.AvailablePaths;var buttons=new WrapPanel{VerticalAlignment=VerticalAlignment.Center};DockPanel.SetDock(buttons,Dock.Right);row.Children.Add(buttons);
@@ -195,7 +251,7 @@ public sealed partial class MainWindow:Window
         dialog.Closing+=(_,e)=>{if(busy){e.Cancel=true;L10n.SetText(status,"Finish or cancel the current operation first.");}};
         dialog.Closed+=(_,_)=>{inspection?.Cancel();if(dialog.Content is ScrollViewer scroll)scroll.Content=null;dialog.Content=null;webWindow=null;};dialog.PreviewKeyDown+=(_,e)=>{if(e.Key==Key.Escape&&!busy){dialog.Close();e.Handled=true;}};dialog.Show();link.Focus();
     }
-    private void SetBusy(bool value){busy=value;updateButton.IsEnabled=!value&&!checking;workArea.IsEnabled=!value;webContent.IsEnabled=!value;L10n.Bind(toolsSetupButton,ContentControl.ContentProperty,tools.Ready&&officeRuntime.Executable is not null?"Tools ready":"Finish setup");RenderLibrary();}
+    private void SetBusy(bool value){busy=value;updateButton.IsEnabled=!value&&!checking;workArea.IsEnabled=!value;webContent.IsEnabled=!value;L10n.Bind(toolsSetupButton,ContentControl.ContentProperty,tools.Ready&&officeRuntime.Executable is not null?"Tools ready":"Finish setup");RenderLibrary();RenderQueue();}
     internal const string ShortcutHelp="Ctrl+O  Choose files\nCtrl+V  Paste files, text, an image or link\nCtrl+Space / Enter  Open tools and conversions\nDelete  Remove selected files from Nashi\nCtrl+1 / Ctrl+2  Home / Library\nCtrl+F  Find in Library\nCtrl+Shift+D  Use a copied download link\nCtrl+U  Check for updates\n\nWheel: arrows / Tab to choose, Enter to open, Esc to close\nMedia: Space play/pause, ←/→ 1 second, Shift+←/→ 1/30s, I/O set range\nCrop: drag, Shift locks ratio, Enter saves\nEditing text: normal paste and arrow keys are preserved.";
     private void ShowShortcuts()=>MessageBox.Show(this,L10n.Text(ShortcutHelp),L10n.Text("Nashi · Features & shortcuts"));
     private sealed class FileNameConverter:System.Windows.Data.IValueConverter
@@ -289,11 +345,15 @@ public sealed partial class MainWindow:Window
     }
     private async Task RunAsync(Func<string,IProgress<OperationProgress>,CancellationToken,Task<IReadOnlyList<string>>> work,string label="Fresh copy",IReadOnlyList<string>? sources=null)
     {
-        if(busy)return;var owner=webWindow?.IsActive==true?webWindow:this;string destination;
+        if(busy){
+            if(sources is not null&&sources.Count>0)queueStore.Enqueue(label,sources[0]);
+            L10n.SetText(status,"Added to queue. Will start when current operation finishes.");
+            return;
+        }var owner=webWindow?.IsActive==true?webWindow:this;string destination;
         if(label=="Move"||preferences.Value.OutputMode=="ask"||(files.Count==0&&owner==this)){var folder=new OpenFolderDialog{Title=L10n.Text("Save new files to…"),InitialDirectory=Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)};if(folder.ShowDialog(owner)!=true)return;destination=folder.FolderName;}
         else destination=owner==webWindow?preferences.Value.DownloadFolder:preferences.Value.OutputMode=="folder"&&!string.IsNullOrWhiteSpace(preferences.Value.OutputFolder)?preferences.Value.OutputFolder:Path.GetDirectoryName(files[0])!;
         SetBusy(true);using var cancellation=new CancellationTokenSource();var toast=new ToastWindow(owner,cancellation.Cancel,undoHistory);toast.Show();
-        try{var outputs=await work(destination,new Progress<OperationProgress>(toast.Update),cancellation.Token);toast.Complete(outputs,label,sources);Record(label,outputs);L10n.SetText(status,$"Saved {outputs.Count} new {(outputs.Count==1?"file":"files")}. Originals kept.");if(preferences.Value.RevealFinished&&outputs.Count>0)Reveal(outputs[0]);}
+        try{var outputs=await work(destination,new Progress<OperationProgress>(toast.Update),cancellation.Token);toast.Complete(outputs,label,sources);Record(label,outputs);L10n.SetText(status,$"Saved {outputs.Count} new {(outputs.Count==1?"file":"files")}. Originals kept."+(queueStore.PendingCount>0?$" Queue: {queueStore.PendingCount} pending.":""));if(preferences.Value.RevealFinished&&outputs.Count>0)Reveal(outputs[0]);}
         catch(OperationCanceledException){toast.Close();L10n.SetText(status,"Cancelled. Originals kept.");}
         catch(Exception error){toast.Close();MessageBox.Show(this,L10n.Text(error.Message),L10n.Text("Couldn’t finish"),MessageBoxButton.OK,MessageBoxImage.Information);}
         finally{SetBusy(false);}
