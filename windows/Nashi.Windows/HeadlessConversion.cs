@@ -16,7 +16,7 @@ public sealed class HeadlessConversion
     private readonly PreferencesStore preferences;private readonly Toolchain tools;private readonly OfficeRuntime officeRuntime;private Window? toastOwner;
     public HeadlessConversion()
     {
-        var dataDir=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"Nashi");
+        var dataDir=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"Otto");
         Directory.CreateDirectory(dataDir);
         preferences=new PreferencesStore(dataDir);
         var toolsDir=Path.Combine(dataDir,"tools");Directory.CreateDirectory(toolsDir);

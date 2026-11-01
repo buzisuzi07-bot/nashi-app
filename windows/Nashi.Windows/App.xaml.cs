@@ -27,7 +27,7 @@ public partial class App:Application
                 Directory.CreateDirectory(folder);
                 File.WriteAllText(Path.Combine(folder,"dispatcher-error.txt"),error.Exception.ToString());
             }
-            var result=MessageBox.Show($"Nashi beklenmedik bir hatayla karşılaştı:\n{error.Exception.Message}\n\nUygulamayı yeniden başlatmak ister misiniz?","Nashi — Çöküş",MessageBoxButton.YesNo,MessageBoxImage.Error);
+            var result=MessageBox.Show($"Otto beklenmedik bir hatayla karşılaştı:\n{error.Exception.Message}\n\nUygulamayı yeniden başlatmak ister misiniz?","Otto — Çöküş",MessageBoxButton.YesNo,MessageBoxImage.Error);
             if(result==MessageBoxResult.Yes){
                 try{Process.Start(new ProcessStartInfo(Environment.ProcessPath!){UseShellExecute=true})?.Dispose();}catch{}
             }
@@ -90,7 +90,7 @@ public partial class App:Application
             new Window{Title=minimum>620?"Nashi Constrained Layout Fixture":"Nashi Window Layout Fixture",Width=Math.Max(620,minimum),MinWidth=minimum,Height=420,Left=80,Top=90,WindowStartupLocation=WindowStartupLocation.Manual,
                 Content=new System.Windows.Controls.TextBlock{Text="Nashi window arrangement test fixture",Margin=new Thickness(30),FontSize=22}}.Show();return;
         }
-        if(e.Args.Length==2&&e.Args[0]=="--apply-update"){try{Shutdown(UpdateInstaller.Apply(e.Args[1]));}catch(Exception error){UseSavedLanguage();MessageBox.Show(L10n.Text(error.Message),L10n.Text("Nashi update could not finish"));Shutdown(1);}return;}
+        if(e.Args.Length==2&&e.Args[0]=="--apply-update"){try{Shutdown(UpdateInstaller.Apply(e.Args[1]));}catch(Exception error){UseSavedLanguage();MessageBox.Show(L10n.Text(error.Message),L10n.Text("Otto update could not finish"));Shutdown(1);}return;}
         if(e.Args.Contains("--verify-update-state")){try{ShutdownMode=ShutdownMode.OnExplicitShutdown;SmokeTests.VerifyUpdateState();Shutdown(0);}catch(Exception error){Console.Error.WriteLine(error);Shutdown(1);}return;}
         if(e.Args.Contains("--smoke-test")){IsSmokeTest=true;try{NativeExceptionTrace.Install();SmokeTests.Run();Shutdown(0);}catch(Exception error){Console.Error.WriteLine(error);var directory=Environment.GetEnvironmentVariable("NASHI_SMOKE_DIRECTORY");if(directory is not null){Directory.CreateDirectory(directory);File.WriteAllText(Path.Combine(directory,"error.txt"),error.ToString());}Shutdown(1);}return;}
         if(e.Args.Length==1&&e.Args[0]=="--install-update"){ShutdownMode=ShutdownMode.OnExplicitShutdown;_ = InstallUpdateAsync();return;}
@@ -128,7 +128,7 @@ public partial class App:Application
                 // --wheel: open the tools wheel at the cursor and exit.
                 try
                 {
-                    var wheelPrefs=new PreferencesStore(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"Nashi"));
+                    var wheelPrefs=new PreferencesStore(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"Otto"));
                     var wheel=new GlobalDropWheel("tools",wheelPrefs.Value.WheelScale,(_,_)=>{},()=>null);
                     wheel.Show();wheel.UpdateLayout();
                     var closed=false;wheel.Closed+=(_,_)=>{closed=true;Dispatcher.CurrentDispatcher.BeginInvokeShutdown(DispatcherPriority.Background);};
@@ -148,7 +148,7 @@ public partial class App:Application
     internal static void UseSavedLanguage(Func<string>? readLanguage=null)
     {
         L10n.Language="en";
-        try{L10n.Language=readLanguage is null?new Nashi.Core.PreferencesStore(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"Nashi")).Value.Language:readLanguage();}
+        try{L10n.Language=readLanguage is null?new Nashi.Core.PreferencesStore(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"Otto")).Value.Language:readLanguage();}
         catch(Exception error)when(error is IOException or UnauthorizedAccessException or System.Security.SecurityException){/* Preserve the original error dialog in English. */}
     }
     private async Task ForwardAndExit(string[] paths)
@@ -166,7 +166,7 @@ public partial class App:Application
         }
         catch(Exception error)
         {
-            var directory=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"Nashi");Directory.CreateDirectory(directory);File.WriteAllText(Path.Combine(directory,"update-error.txt"),error.ToString());Shutdown(1);
+            var directory=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"Otto");Directory.CreateDirectory(directory);File.WriteAllText(Path.Combine(directory,"update-error.txt"),error.ToString());Shutdown(1);
         }
     }
 }
